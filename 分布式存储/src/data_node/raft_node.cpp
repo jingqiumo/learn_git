@@ -73,6 +73,30 @@ RaftNode::handleRequestVote(const dkv::raft::RequestVoteRequest& req) {
     return resp;
 }
 
+void RaftNode::processRequestVoteResponse(uint64_t fromPeer, uint64_t respTerm,
+                                          bool voteGranted) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (state_ != CANDIDATE || respTerm != currentTerm_) return;
+
+    if (respTerm > currentTerm_) {
+        becomeFollower(respTerm);
+        return;
+    }
+
+    if (voteGranted) {
+        votesReceived_++;
+        std::cout << "[Raft] Node " << nodeId_ << " got vote from " << fromPeer
+                  << " (" << votesReceived_ << "/" << (peerIds_.size() + 1) << ")"
+                  << std::endl;
+    }
+
+    int majority = (int)(peerIds_.size() + 1) / 2 + 1;
+    if (votesReceived_ >= majority) {
+        becomeLeader();
+    }
+}
+
 dkv::raft::AppendEntriesResponse
 RaftNode::handleAppendEntries(const dkv::raft::AppendEntriesRequest& req) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -208,6 +232,7 @@ void RaftNode::becomeLeader() {
 }
 
 void RaftNode::startElection() {
+    votesReceived_ = 1;  // 重置票数，投自己一票
     std::cout << "[Raft] Node " << nodeId_ << " starting election for term "
               << currentTerm_ << std::endl;
 

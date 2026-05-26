@@ -36,6 +36,9 @@ public:
     dkv::raft::RequestVoteResponse handleRequestVote(const dkv::raft::RequestVoteRequest& req);
     dkv::raft::AppendEntriesResponse handleAppendEntries(const dkv::raft::AppendEntriesRequest& req);
 
+    // Candidate 处理投票回复：累加票数，达到多数则成为 Leader
+    void processRequestVoteResponse(uint64_t fromPeer, uint64_t term, bool voteGranted);
+
     // 定时 tick，驱动选举超时和心跳
     void tick();
 

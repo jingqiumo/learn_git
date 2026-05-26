@@ -125,13 +125,7 @@ void RaftService::onPeerMessage(const TcpConnectionPtr& conn,
         }
         case dkv::raft::RaftMessage::REQUEST_VOTE_RESP: {
             auto& resp = msg.request_vote_resp();
-            if (resp.term() > raft_->getCurrentTerm()) {
-                // term 过期，handleRequestVote 中已处理
-            }
-            if (resp.vote_granted()) {
-                std::cout << "[Raft] Node " << nodeId_
-                          << " received vote from " << fromNode << std::endl;
-            }
+            raft_->processRequestVoteResponse(fromNode, resp.term(), resp.vote_granted());
             break;
         }
         case dkv::raft::RaftMessage::APPEND_ENTRIES: {
