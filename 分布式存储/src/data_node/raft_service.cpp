@@ -137,8 +137,9 @@ void RaftService::onPeerMessage(const TcpConnectionPtr& conn,
             break;
         }
         case dkv::raft::RaftMessage::APPEND_ENTRIES_RESP: {
-            // matchIndex/nextIndex 已在 RaftNode 内部维护
-            // tick 中的 advanceCommit 会根据 matchIndex 推进
+            auto& resp = msg.append_entries_resp();
+            raft_->processAppendEntriesResponse(fromNode, resp.term(),
+                                                 resp.success(), resp.match_index());
             break;
         }
         default:

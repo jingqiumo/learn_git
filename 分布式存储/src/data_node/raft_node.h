@@ -54,6 +54,9 @@ public:
     dkv::raft::AppendEntriesResponse handleAppendEntries(const dkv::raft::AppendEntriesRequest& req);
     // Candidate 收到投票回复：累加票数，超过半数则成为 Leader
     void processRequestVoteResponse(uint64_t fromPeer, uint64_t term, bool voteGranted);
+    // Leader 收到 AppendEntries 回复：更新 matchIndex/nextIndex，失败则递减后重试
+    void processAppendEntriesResponse(uint64_t fromPeer, uint64_t term,
+                                       bool success, uint64_t matchIndex);
 
     // ---- 定时驱动 ----
     // 每 10ms 由 muduo 定时器调用。Follower 检查选举超时，Leader 发心跳 + 推进 commit

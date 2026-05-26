@@ -14,61 +14,87 @@
 #include <unordered_map>
 #include <cstdint>
 
-// RaftService 集成 Raft 共识、RocksDB 存储 和 节点间 RPC 通信
+// RaftService = RaftNode + 网络 + RocksDB 的胶水层
+//
+// 职责：把 Raft 算法的三个依赖（网络收发、磁盘持久化、状态机 apply）注入 RaftNode
+//
+//   RaftNode 的回调                     RaftService 的实现
+//   ──────────────                      ──────────────────
+//   persistCb_()           ──→    persistRaftState()     → engine_->put()
+//   applyCb_(idx, cmd)     ──→    onApply(idx, cmd)      → engine_->put/del()
+//   rpcSender_(peer, msg)  ──→    sendRaftRpc(peer, msg) → TcpClient 发送
+//
 class RaftService {
 public:
+    // nodeId: 本节点 ID
+    // peers:  {peerId → "ip:port"} 映射表（含本节点），用于建立 TCP 连接和重定向
+    // engine: RocksDB 实例（与 KvService 共享）
     RaftService(muduo::net::EventLoop* loop,
                 uint64_t nodeId,
                 const std::unordered_map<uint64_t, std::string>& peers,
                 std::shared_ptr<RocksEngine> engine);
 
+    // 启动：连接所有 peer + 恢复持久化状态
     void start();
+    // 停止：断开所有 peer 连接
     void stop();
 
-    // 客户端读写接口
+    // ---- 客户端 API（被 KvService 调用） ----
+    // 提交一条命令到 Raft 日志（内部调 raft_->propose()）
     bool propose(const std::string& command);
+    // 本节点是否是 Leader
     bool isLeader() const;
+    // 当前已知的 Leader 节点 ID
     uint64_t getLeaderId() const;
+    // 获取 Leader 的 "ip:port" 地址（Follower 被读写时用于返回重定向地址）
     bool getLeaderAddr(std::string& addr) const;
     uint64_t getNodeId() const { return nodeId_; }
 
-    // 定时 tick，由 EventLoop timer 驱动
+    // 定时 tick，由 EventLoop 的定时器每 10ms 调用一次，驱动 raft_->tick()
     void tick();
 
 private:
-    // 对等节点 RPC
+    // ---- 节点间 RPC 通信 ----
+    // 向 peerId 发起 TCP 连接，addr 格式 "ip:port"
     void connectToPeer(uint64_t peerId, const std::string& addr);
+    // 发送一条 Raft RPC 消息（RequestVote / AppendEntries）到指定 peer
     void sendRaftRpc(uint64_t peerId, const dkv::raft::RaftMessage& msg);
-
-    // 收到对等节点的 Raft RPC
+    // 收到 peer 发来的 Raft RPC 消息，解析 type 后分发给 raft_->handleXXX()
     void onPeerMessage(const muduo::net::TcpConnectionPtr& conn,
                        muduo::net::Buffer* buf,
                        muduo::Timestamp ts,
                        uint64_t fromNode);
 
-    // 处理 Raft 日志条目并应用到 RocksDB
+    // ---- Raft → RocksDB 桥接 ----
+    // Raft 日志被 commit 后，解析命令并写入 RocksDB（被 raft_ 的 applyCb_ 回调触发）
     void onApply(uint64_t index, const std::string& cmd);
 
-    // 持久化 Raft 状态到 RocksDB
+    // ---- 持久化 ----
+    // 将 currentTerm / votedFor / log[] 保存到 RocksDB（被 raft_ 的 persistCb_ 回调触发）
     void persistRaftState();
-
-    // 从 RocksDB 恢复 Raft 状态（启动时调用）
+    // 启动时从 RocksDB 恢复 persistent state，传给 raft_->loadPersistedState()
     void recoverRaftState();
 
-    muduo::net::EventLoop* loop_;
-    uint64_t nodeId_;
-    std::unordered_map<uint64_t, std::string> peerAddrs_;
+    // ==================== 成员变量 ====================
 
-    std::shared_ptr<RocksEngine> engine_;
-    std::unique_ptr<RaftNode> raft_;
+    // ---- 基础信息 ----
+    muduo::net::EventLoop* loop_;                               // muduo 事件循环
+    uint64_t nodeId_;                                           // 本节点 ID
+    std::unordered_map<uint64_t, std::string> peerAddrs_;        // {peerId → "ip:port"} 地址簿
 
-    // 到对等节点的连接: peerId → TcpClient
+    // ---- 核心组件 ----
+    std::shared_ptr<RocksEngine> engine_;    // RocksDB 实例（与 KvService 共享）
+    std::unique_ptr<RaftNode> raft_;         // Raft 共识算法实例
+
+    // ---- 对等节点连接 ----
+    // TcpClient 管理 TCP 连接的生命周期（重连、断开检测）
     std::unordered_map<uint64_t, std::unique_ptr<muduo::net::TcpClient>> peerClients_;
-    // 对等节点的连接对象（用于发送）: peerId → TcpConnectionPtr
+    // 已建立的 TcpConnection，用于发送 Raft RPC 数据
     std::unordered_map<uint64_t, muduo::net::TcpConnectionPtr> peerConns_;
+    // 保护 peerConns_ 的并发访问（连接回调来自 I/O 线程，tick 可能来自定时器线程）
     std::mutex peerMutex_;
 
-    // 本地监听端口，供对等节点连接
+    // ---- Raft 内部 RPC 监听端口（当前未使用，Raft RPC 复用了 API 端口） ----
     uint16_t raftPort_;
     std::unique_ptr<muduo::net::TcpServer> raftServer_;
 };

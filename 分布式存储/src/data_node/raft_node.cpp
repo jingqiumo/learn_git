@@ -98,6 +98,27 @@ void RaftNode::processRequestVoteResponse(uint64_t fromPeer, uint64_t respTerm,
     }
 }
 
+void RaftNode::processAppendEntriesResponse(uint64_t fromPeer, uint64_t term,
+                                             bool success, uint64_t matchIndex) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (state_ != LEADER || term != currentTerm_) return;
+
+    if (success) {
+        // Follower 确认复制到了 matchIndex，更新进度
+        if (matchIndex > matchIndex_[fromPeer]) {
+            matchIndex_[fromPeer] = matchIndex;
+            nextIndex_[fromPeer] = matchIndex + 1;
+        }
+    } else {
+        // 日志不一致，回退 nextIndex 下次重试
+        if (nextIndex_[fromPeer] > 1) {
+            nextIndex_[fromPeer]--;
+        }
+        sendAppendEntries(false);  // 立刻重试，不等下一个 tick
+    }
+}
+
 dkv::raft::AppendEntriesResponse
 RaftNode::handleAppendEntries(const dkv::raft::AppendEntriesRequest& req) {
     std::lock_guard<std::mutex> lock(mutex_);
