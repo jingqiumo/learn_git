@@ -1,0 +1,2 @@
+/usr/bin/ar qc libdkv_client.a CMakeFiles/dkv_client.dir/src/client_sdk/kv_client.cpp.o CMakeFiles/dkv_client.dir/src/client_sdk/router.cpp.o CMakeFiles/dkv_client.dir/src/common/config.cpp.o CMakeFiles/dkv_client.dir/common.pb.cc.o CMakeFiles/dkv_client.dir/kv_rpc.pb.cc.o CMakeFiles/dkv_client.dir/pd_rpc.pb.cc.o CMakeFiles/dkv_client.dir/raft_rpc.pb.cc.o
+/usr/bin/ranlib libdkv_client.a

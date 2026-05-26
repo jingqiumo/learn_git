@@ -1,0 +1,88 @@
+syntax = "proto3";
+package dkv.kv;
+
+import "common.proto";
+
+message GetRequest {
+    bytes key = 1;
+    bool allow_stale = 2;
+    uint64 call_id = 3;
+}
+
+message GetResponse {
+    common.ErrorCode error_code = 1;
+    bytes key = 2;
+    bytes value = 3;
+    uint64 call_id = 4;
+    uint64 correct_leader_node_id = 5;
+    string correct_leader_addr = 6;
+}
+
+message PutRequest {
+    bytes key = 1;
+    bytes value = 2;
+    uint64 call_id = 3;
+}
+
+message PutResponse {
+    common.ErrorCode error_code = 1;
+    uint64 call_id = 2;
+    uint64 correct_leader_node_id = 3;
+    string correct_leader_addr = 4;
+}
+
+message DeleteRequest {
+    bytes key = 1;
+    uint64 call_id = 2;
+}
+
+message DeleteResponse {
+    common.ErrorCode error_code = 1;
+    uint64 call_id = 2;
+    uint64 correct_leader_node_id = 3;
+    string correct_leader_addr = 4;
+}
+
+message ScanRequest {
+    bytes start_key = 1;
+    bytes end_key = 2;
+    uint32 limit = 3;
+    bool allow_stale = 4;
+    uint64 call_id = 5;
+}
+
+message ScanResponse {
+    common.ErrorCode error_code = 1;
+    message KV {
+        bytes key = 1;
+        bytes value = 2;
+    }
+    repeated KV kvs = 2;
+    bool has_more = 3;
+    bytes next_start_key = 4;
+    uint64 call_id = 5;
+    uint64 correct_leader_node_id = 6;
+    string correct_leader_addr = 7;
+}
+
+message RpcMessage {
+    enum Type {
+        GET_REQUEST = 0;
+        GET_RESPONSE = 1;
+        PUT_REQUEST = 2;
+        PUT_RESPONSE = 3;
+        DELETE_REQUEST = 4;
+        DELETE_RESPONSE = 5;
+        SCAN_REQUEST = 6;
+        SCAN_RESPONSE = 7;
+    }
+    Type type = 1;
+    GetRequest get_request = 10;
+    GetResponse get_response = 11;
+    PutRequest put_request = 12;
+    PutResponse put_response = 13;
+    DeleteRequest delete_request = 14;
+    DeleteResponse delete_response = 15;
+    ScanRequest scan_request = 16;
+    ScanResponse scan_response = 17;
+}

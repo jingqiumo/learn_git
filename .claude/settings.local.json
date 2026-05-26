@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /home/hsj/dev/chat/src/client)",
+      "Bash(apt-cache search *)",
+      "Bash(sudo apt-get install -y librocksdb-dev protobuf-compiler libprotobuf-dev libgtest-dev)",
+      "Bash(cmake --build .)",
+      "Bash(./bin/test_codec)",
+      "Bash(./bin/test_shard_router)",
+      "Bash(./bin/test_single_node)"
+    ],
+    "additionalDirectories": [
+      "/home/hsj/dev/chat/src/client"
+    ]
+  }
+}

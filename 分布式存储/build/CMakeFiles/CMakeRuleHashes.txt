@@ -1,0 +1,5 @@
+# Hashes of file build rules.
+974a9c33582afc60b91ef9775f5e0447 common.pb.h
+8d3123678a65e81ac26edbbe82c3e48b kv_rpc.pb.h
+057af1aef4d7bfbcea2b1550cc4dcfe8 pd_rpc.pb.h
+7afe43aeab5b023c5f15d6226ddcc6c1 raft_rpc.pb.h

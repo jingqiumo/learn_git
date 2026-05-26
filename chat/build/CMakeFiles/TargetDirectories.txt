@@ -1,0 +1,4 @@
+/home/hsj/dev/chat/build/CMakeFiles/chat_server.dir
+/home/hsj/dev/chat/build/CMakeFiles/chat_client.dir
+/home/hsj/dev/chat/build/CMakeFiles/edit_cache.dir
+/home/hsj/dev/chat/build/CMakeFiles/rebuild_cache.dir
