@@ -77,12 +77,13 @@ void RaftNode::processRequestVoteResponse(uint64_t fromPeer, uint64_t respTerm,
                                           bool voteGranted) {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    if (state_ != CANDIDATE || respTerm != currentTerm_) return;
-
+    // 更高 term → 退位，与论文 Figure 2 一致
     if (respTerm > currentTerm_) {
         becomeFollower(respTerm);
         return;
     }
+    // term 不匹配 或 已不是 Candidate → 忽略
+    if (respTerm != currentTerm_ || state_ != CANDIDATE) return;
 
     if (voteGranted) {
         votesReceived_++;
@@ -306,6 +307,22 @@ void RaftNode::applyEntries() {
 
 void RaftNode::persist() {
     if (persistCb_) persistCb_();
+}
+
+void RaftNode::loadPersistedState(uint64_t term, uint64_t votedFor,
+                                   const std::vector<dkv::raft::LogEntry>& log) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    currentTerm_ = term;
+    votedFor_ = votedFor;
+    log_.clear();
+    // 重新加哨兵
+    dkv::raft::LogEntry sentinel;
+    sentinel.set_term(0);
+    sentinel.set_index(0);
+    log_.push_back(sentinel);
+    for (auto& e : log) log_.push_back(e);
+    std::cout << "[Raft] Node " << nodeId_ << " recovered: term=" << currentTerm_
+              << ", log size=" << (log_.size() - 1) << std::endl;
 }
 
 const dkv::raft::LogEntry& RaftNode::getLogEntry(uint64_t index) const {

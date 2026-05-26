@@ -167,23 +167,60 @@ void RaftService::onApply(uint64_t index, const std::string& cmd) {
     }
 }
 
+// 编码日志索引为 8 字节大端 key（保证按 index 有序）
+static std::string encodeLogKey(uint64_t index) {
+    std::string key = "\xff";
+    for (int i = 7; i >= 0; --i) key += static_cast<char>((index >> (i * 8)) & 0xFF);
+    return key;
+}
+
 void RaftService::persistRaftState() {
-    // 将 Raft 持久化状态保存到 RocksDB
-    // 使用特殊 key 前缀 0x00 存储 currentTerm / votedFor
+    // 保存 currentTerm / votedFor
     std::string termKey = std::string("\x00raft_term", 10);
     std::string voteKey = std::string("\x00raft_vote", 10);
     engine_->put(termKey, std::to_string(raft_->getCurrentTerm()));
     engine_->put(voteKey, std::to_string(raft_->getVotedFor()));
-    // Note: 完整的 Log 持久化需要保存 log entries，此处简化
+
+    // 保存全部 log entries（RocksDB 的 key 有序，遍历时按 index 升序）
+    const auto& log = raft_->getLog();
+    std::vector<std::string> oldKeys;
+    std::vector<std::pair<std::string, std::string>> puts;
+    std::string prevKey;
+    // 扫描已有的 log key，收集旧 key 用于删除
+    auto scanRes = engine_->scan("\xff", "\xff\xff", 100000);
+    for (auto& kv : scanRes.kvs) oldKeys.push_back(kv.first);
+    // 写入当前日志（跳过 index=0 的哨兵）
+    for (size_t i = 1; i < log.size(); ++i) {
+        std::string key = encodeLogKey(log[i].index());
+        std::string val;
+        log[i].SerializeToString(&val);
+        puts.emplace_back(key, val);
+    }
+    engine_->writeBatch(puts, oldKeys);
 }
 
 void RaftService::recoverRaftState() {
-    // 从 RocksDB 恢复 Raft 状态（如果有的话）
     std::string termKey = std::string("\x00raft_term", 10);
-    std::string termVal;
-    if (engine_->get(termKey, termVal)) {
-        uint64_t term = std::stoull(termVal);
-        std::cout << "[Raft] Recovered term=" << term << std::endl;
+    std::string voteKey = std::string("\x00raft_vote", 10);
+    std::string termVal, voteVal;
+
+    uint64_t term = 0;
+    uint64_t votedFor = 0;
+    if (engine_->get(termKey, termVal)) term = std::stoull(termVal);
+    if (engine_->get(voteKey, voteVal)) votedFor = std::stoull(voteVal);
+
+    // 扫描所有 \xff 前缀的 key，按 index 升序重建 log
+    std::vector<dkv::raft::LogEntry> log;
+    auto scanRes = engine_->scan("\xff", "\xff\xff", 100000);
+    for (auto& kv : scanRes.kvs) {
+        dkv::raft::LogEntry entry;
+        if (entry.ParseFromString(kv.second)) {
+            log.push_back(entry);
+        }
+    }
+
+    if (term > 0 || !log.empty()) {
+        raft_->loadPersistedState(term, votedFor, log);
     }
 }
 
