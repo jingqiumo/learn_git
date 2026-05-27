@@ -16,8 +16,10 @@ void PdService::handleRegisterNode(const TcpConnectionPtr& conn,
     std::string data;
     resp.SerializeToString(&data);
     uint32_t len = htonl(data.size());
+    char type = 0x00;
     muduo::net::Buffer buf;
     buf.append(&len, 4);
+    buf.append(&type, 1);
     buf.append(data);
     conn->send(&buf);
 }
@@ -34,8 +36,10 @@ void PdService::handleHeartbeat(const TcpConnectionPtr& conn,
     std::string data;
     resp.SerializeToString(&data);
     uint32_t len = htonl(data.size());
+    char type = 0x00;
     muduo::net::Buffer buf;
     buf.append(&len, 4);
+    buf.append(&type, 1);
     buf.append(data);
     conn->send(&buf);
 }
@@ -52,8 +56,10 @@ void PdService::handleGetShardMap(const TcpConnectionPtr& conn,
     std::string data;
     resp.SerializeToString(&data);
     uint32_t len = htonl(data.size());
+    char type = 0x00;
     muduo::net::Buffer buf;
     buf.append(&len, 4);
+    buf.append(&type, 1);
     buf.append(data);
     conn->send(&buf);
 }

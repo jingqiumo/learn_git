@@ -25,6 +25,8 @@ public:
                const std::string& db_path);
 
     void start();
+    // 驱动 Raft 定时任务（选举超时检查、心跳发送、commit 推进）
+    void tick();
 
 private:
     void onConnection(const muduo::net::TcpConnectionPtr& conn);

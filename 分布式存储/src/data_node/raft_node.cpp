@@ -193,11 +193,7 @@ void RaftNode::tick() {
 
     if (state_ == FOLLOWER || state_ == CANDIDATE) {
         if (elapsed >= electionTimeoutMs_) {
-            if (state_ == FOLLOWER) {
-                becomeCandidate();
-            } else {
-                startElection();
-            }
+            becomeCandidate();  // 每次选举超时都递增 term（论文 Figure 2）
         }
     }
 

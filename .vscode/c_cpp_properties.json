@@ -4,7 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/hsj/muduo"
+                "/home/hsj/muduo",
+                "${workspaceFolder}/分布式存储/build"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

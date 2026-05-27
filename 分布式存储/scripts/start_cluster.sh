@@ -4,9 +4,6 @@ BIN_DIR="$(cd "$(dirname "$0")/.." && pwd)/bin"
 
 echo "=== DKV Full Cluster ==="
 
-# 清理
-for i in 1 2 3; do rm -rf "/tmp/dkv_node${i}"; done
-
 # 启动 PD
 $BIN_DIR/pd_server 127.0.0.1 8100 1 &
 PD_PID=$!

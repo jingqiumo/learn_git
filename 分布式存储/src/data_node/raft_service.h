@@ -39,6 +39,10 @@ public:
     // 停止：断开所有 peer 连接
     void stop();
 
+    // ---- Raft 消息入口（被 DataServer 调用，处理 peer 发来的 Raft RPC） ----
+    void handleRaftMessage(const muduo::net::TcpConnectionPtr& conn,
+                            const dkv::raft::RaftMessage& msg, uint64_t fromNode);
+
     // ---- 客户端 API（被 KvService 调用） ----
     // 提交一条命令到 Raft 日志（内部调 raft_->propose()）
     bool propose(const std::string& command);

@@ -43,8 +43,10 @@ void LengthPrefixedCodec::send(const TcpConnectionPtr& conn,
 void LengthPrefixedCodec::sendRaw(const TcpConnectionPtr& conn,
                                    const std::string& data) {
     uint32_t len = htonl(data.size());
+    char type = 0x00;  // 客户端消息
     Buffer buf;
     buf.append(&len, 4);
+    buf.append(&type, 1);
     buf.append(data);
     conn->send(&buf);
 }

@@ -42,9 +42,9 @@ int main(int argc, char* argv[]) {
                 peers[pid] = addr;
             }
         }
-        // 把自己也加入 peers 列表
+        // 把自己也加入 peers 列表（getLeaderAddr 需要查自己的地址）
         if (peers.find(nodeId) == peers.end()) {
-            // 用 argv[1] 和 raftPort = apiPort + 1
+            peers[nodeId] = std::string(argv[1]) + ":" + std::to_string(api_port);
         }
     }
 
@@ -69,11 +69,9 @@ int main(int argc, char* argv[]) {
     g_server = server;
     server->start();
 
-    // Raft tick 定时器（每 10ms）
+    // Raft tick 定时器（每 10ms 驱动选举超时检查和心跳发送）
     if (nodeId > 0) {
-        loop.runEvery(0.01, [server]() {
-            // server 需要暴露 tick 接口
-        });
+        loop.runEvery(0.01, [server]() { server->tick(); });
     }
 
     loop.loop();

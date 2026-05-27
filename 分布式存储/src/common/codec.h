@@ -6,8 +6,9 @@
 #include <muduo/base/Timestamp.h>
 #include <google/protobuf/message.h>
 
-// 长度前缀编解码器：4字节大端长度 + Protobuf 序列化数据
-// 用于 muduo 的 onMessage 回调中解析完整帧
+// 长度前缀编解码器
+// 帧格式: [4字节大端长度(仅protobuf数据长度)] [1字节类型] [protobuf数据]
+// 类型: 0x00 = 客户端 RpcMessage, 0x01 = Raft RaftMessage
 class LengthPrefixedCodec {
 public:
     using MessageCallback = std::function<void(

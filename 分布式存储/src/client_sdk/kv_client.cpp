@@ -46,11 +46,14 @@ bool KvClient::fetchShardMap() {
 
     std::string respData;
     uint32_t len = htonl(data.size());
+    char type = 0x00;
     if (::send(pdSock_, &len, 4, 0) != 4) return false;
+    if (::send(pdSock_, &type, 1, 0) != 1) return false;
     if (::send(pdSock_, data.data(), data.size(), 0) != (ssize_t)data.size()) return false;
 
-    uint32_t respLen = 0;
+    uint32_t respLen = 0; char rtype = 0;
     if (::recv(pdSock_, &respLen, 4, MSG_WAITALL) != 4) return false;
+    if (::recv(pdSock_, &rtype, 1, MSG_WAITALL) != 1) return false;
     respLen = ntohl(respLen);
     respData.resize(respLen);
     if (::recv(pdSock_, respData.data(), respLen, MSG_WAITALL) != (ssize_t)respLen) return false;
@@ -87,12 +90,16 @@ bool KvClient::sendRaw(const std::string& ip, uint16_t port,
     }
 
     uint32_t len = htonl(data.size());
+    char type = 0x00;  // 客户端消息
     bool ok = (::send(sock, &len, 4, 0) == 4)
+           && (::send(sock, &type, 1, 0) == 1)
            && (::send(sock, data.data(), data.size(), 0) == (ssize_t)data.size());
 
     if (ok) {
         uint32_t rlen = 0;
-        if (::recv(sock, &rlen, 4, MSG_WAITALL) == 4) {
+        char rtype = 0;
+        if (::recv(sock, &rlen, 4, MSG_WAITALL) == 4
+            && ::recv(sock, &rtype, 1, MSG_WAITALL) == 1) {
             rlen = ntohl(rlen);
             respData.resize(rlen);
             if (::recv(sock, respData.data(), rlen, MSG_WAITALL) != (ssize_t)rlen) ok = false;
@@ -121,10 +128,11 @@ bool KvClient::sendToAddr(const std::string& addr,
         // 检查是否需要重定向
         if (resp.type() == dkv::kv::RpcMessage::PUT_RESPONSE
             && resp.put_response().error_code() == dkv::common::NOT_LEADER) {
-            // 更新路由并重试
             std::string newAddr = resp.put_response().correct_leader_addr();
             if (!newAddr.empty()) {
                 std::cout << "[Client] Redirected to " << newAddr << std::endl;
+                // 更新路由缓存，下次不用重试
+                if (router_) router_->setDirectNode(newAddr);
                 return sendToAddr(newAddr, req, resp, maxRetries - 1);
             }
         }
@@ -133,6 +141,7 @@ bool KvClient::sendToAddr(const std::string& addr,
             std::string newAddr = resp.get_response().correct_leader_addr();
             if (!newAddr.empty()) {
                 std::cout << "[Client] Redirected to " << newAddr << std::endl;
+                if (router_) router_->setDirectNode(newAddr);
                 return sendToAddr(newAddr, req, resp, maxRetries - 1);
             }
         }

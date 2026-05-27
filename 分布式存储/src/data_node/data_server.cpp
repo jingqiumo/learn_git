@@ -65,6 +65,10 @@ void DataServer::start() {
     std::cout << "DataServer started on " << server_.ipPort() << std::endl;
 }
 
+void DataServer::tick() {
+    if (raft_) raft_->tick();
+}
+
 void DataServer::onConnection(const TcpConnectionPtr& conn) {
     if (conn->connected()) {
         std::cout << "Client connected: " << conn->peerAddress().toIpPort()
@@ -77,21 +81,34 @@ void DataServer::onConnection(const TcpConnectionPtr& conn) {
 
 void DataServer::onMessage(const TcpConnectionPtr& conn,
                             Buffer* buf, Timestamp ts) {
-    while (buf->readableBytes() >= 4) {
+    while (buf->readableBytes() >= 5) {  // 4字节长度 + 1字节类型
         uint32_t len = 0;
         memcpy(&len, buf->peek(), 4);
         len = ntohl(len);
-        if (buf->readableBytes() < 4 + len) break;
+        if (buf->readableBytes() < 5 + len) break;   // 4字节头 + 1字节类型 + 数据
 
         buf->retrieve(4);
+        char msgType = *(buf->peek());
+        buf->retrieve(1);
         std::string payload = buf->retrieveAsString(len);
 
-        // API 端口只处理客户端 RpcMessage
-        dkv::kv::RpcMessage msg;
-        if (msg.ParseFromString(payload)) {
-            dispatchClientRpc(conn, msg);
+        if (msgType == 0x01 && raft_) {
+            // Raft 消息
+            dkv::raft::RaftMessage raftMsg;
+            if (raftMsg.ParseFromString(payload)) {
+                uint64_t fromNode = 0;
+                if (raftMsg.type() == dkv::raft::RaftMessage::REQUEST_VOTE)
+                    fromNode = raftMsg.request_vote().candidate_id();
+                else if (raftMsg.type() == dkv::raft::RaftMessage::APPEND_ENTRIES)
+                    fromNode = raftMsg.append_entries().leader_id();
+                raft_->handleRaftMessage(conn, raftMsg, fromNode);
+            }
         } else {
-            std::cerr << "Failed to parse RpcMessage" << std::endl;
+            // 客户端消息
+            dkv::kv::RpcMessage rpcMsg;
+            if (rpcMsg.ParseFromString(payload)) {
+                dispatchClientRpc(conn, rpcMsg);
+            }
         }
     }
 }

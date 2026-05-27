@@ -49,13 +49,14 @@ void PdServer::onConnection(const TcpConnectionPtr& conn) {
 void PdServer::onMessage(const TcpConnectionPtr& conn,
                           Buffer* buf, Timestamp ts) {
     (void)ts;
-    while (buf->readableBytes() >= 4) {
+    while (buf->readableBytes() >= 5) {
         uint32_t len = 0;
         memcpy(&len, buf->peek(), 4);
         len = ntohl(len);
-        if (buf->readableBytes() < 4 + len) break;
+        if (buf->readableBytes() < 5 + len) break;
 
         buf->retrieve(4);
+        buf->retrieve(1);  // 跳过类型字节
         std::string payload = buf->retrieveAsString(len);
 
         // 尝试解析 RegisterNodeRequest

@@ -20,9 +20,10 @@ RaftService::RaftService(EventLoop* loop,
     // 创建 RaftNode
     raft_ = std::make_unique<RaftNode>(
         nodeId,
-        [&peers]() {
+        [&peers, nodeId]() {
             std::vector<uint64_t> ids;
-            for (auto& p : peers) ids.push_back(p.first);
+            for (auto& p : peers)
+                if (p.first != nodeId) ids.push_back(p.first); // 不包含自己
             return ids;
         }(),
         std::bind(&RaftService::persistRaftState, this),
@@ -33,11 +34,12 @@ RaftService::RaftService(EventLoop* loop,
         [this](uint64_t peerId, const dkv::raft::RaftMessage& msg) {
             sendRaftRpc(peerId, msg);
         });
-
-    recoverRaftState();
 }
 
 void RaftService::start() {
+    // 从 RocksDB 恢复 Raft 持久化状态（engine 已在 DataServer::start 中打开）
+    recoverRaftState();
+
     // 连接到所有对等节点
     for (auto& [peerId, addr] : peerAddrs_) {
         if (peerId == nodeId_) continue;
@@ -93,8 +95,10 @@ void RaftService::sendRaftRpc(uint64_t peerId, const dkv::raft::RaftMessage& msg
     msg.SerializeToString(&data);
 
     uint32_t len = htonl(data.size());
+    char type = 0x01;  // Raft 消息
     Buffer buf;
     buf.append(&len, 4);
+    buf.append(&type, 1);
     buf.append(data);
     it->second->send(&buf);
 }
@@ -102,13 +106,14 @@ void RaftService::sendRaftRpc(uint64_t peerId, const dkv::raft::RaftMessage& msg
 void RaftService::onPeerMessage(const TcpConnectionPtr& conn,
                                  Buffer* buf, Timestamp ts, uint64_t fromNode) {
     (void)conn; (void)ts;
-    while (buf->readableBytes() >= 4) {
+    while (buf->readableBytes() >= 5) {  // 4字节长度 + 1字节类型
         uint32_t len = 0;
         memcpy(&len, buf->peek(), 4);
         len = ntohl(len);
-        if (buf->readableBytes() < 4 + len) break;
+        if (buf->readableBytes() < 5 + len) break;
 
         buf->retrieve(4);
+        buf->retrieve(1);  // 跳过类型字节（Raft 回复都是 0x01）
         std::string payload = buf->retrieveAsString(len);
 
         dkv::raft::RaftMessage msg;
@@ -222,6 +227,50 @@ void RaftService::recoverRaftState() {
 
     if (term > 0 || !log.empty()) {
         raft_->loadPersistedState(term, votedFor, log);
+    }
+}
+
+void RaftService::handleRaftMessage(const TcpConnectionPtr& conn,
+                                     const dkv::raft::RaftMessage& msg,
+                                     uint64_t fromNode) {
+    switch (msg.type()) {
+    case dkv::raft::RaftMessage::REQUEST_VOTE: {
+        auto resp = raft_->handleRequestVote(msg.request_vote());
+        dkv::raft::RaftMessage rmsg;
+        rmsg.set_type(dkv::raft::RaftMessage::REQUEST_VOTE_RESP);
+        *rmsg.mutable_request_vote_resp() = resp;
+        // 通过接收连接直接回复（不依赖 peerConns_）
+        std::string data; rmsg.SerializeToString(&data);
+        uint32_t len = htonl(data.size());
+        char type = 0x01;
+        Buffer buf; buf.append(&len, 4); buf.append(&type, 1); buf.append(data);
+        conn->send(&buf);
+        break;
+    }
+    case dkv::raft::RaftMessage::REQUEST_VOTE_RESP: {
+        auto& resp = msg.request_vote_resp();
+        raft_->processRequestVoteResponse(fromNode, resp.term(), resp.vote_granted());
+        break;
+    }
+    case dkv::raft::RaftMessage::APPEND_ENTRIES: {
+        auto resp = raft_->handleAppendEntries(msg.append_entries());
+        dkv::raft::RaftMessage rmsg;
+        rmsg.set_type(dkv::raft::RaftMessage::APPEND_ENTRIES_RESP);
+        *rmsg.mutable_append_entries_resp() = resp;
+        std::string data; rmsg.SerializeToString(&data);
+        uint32_t len = htonl(data.size());
+        char type = 0x01;
+        Buffer buf; buf.append(&len, 4); buf.append(&type, 1); buf.append(data);
+        conn->send(&buf);
+        break;
+    }
+    case dkv::raft::RaftMessage::APPEND_ENTRIES_RESP: {
+        auto& resp = msg.append_entries_resp();
+        raft_->processAppendEntriesResponse(fromNode, resp.term(),
+                                             resp.success(), resp.match_index());
+        break;
+    }
+    default: break;
     }
 }
 
