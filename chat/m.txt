@@ -1,0 +1,8 @@
+登陆：{"msgid":1,"id":10000001,"password":"123456"}
+注册：{"msgid":2,"id":10000000,"name":"..."}
+注册成功：{"msgid":3,"error":0,"id":...}
+登陆成功：{"error":0,"msgid":4,"name":"zhangsan"}
+聊天：{"msgid":6,"messageID":1}
+{"msgid":5,"fromid":10000000,"toid":10000001,"message":"hello world"}
+
+添加好友：{"msgid":9,"user_id":10000000,"friend_id":10000001}

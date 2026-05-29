@@ -1,0 +1,2 @@
+/usr/bin/ar qc libdkv_common.a CMakeFiles/dkv_common.dir/src/common/codec.cpp.o CMakeFiles/dkv_common.dir/src/common/config.cpp.o CMakeFiles/dkv_common.dir/src/common/shard_router.cpp.o CMakeFiles/dkv_common.dir/common.pb.cc.o CMakeFiles/dkv_common.dir/kv_rpc.pb.cc.o CMakeFiles/dkv_common.dir/pd_rpc.pb.cc.o CMakeFiles/dkv_common.dir/raft_rpc.pb.cc.o
+/usr/bin/ranlib libdkv_common.a

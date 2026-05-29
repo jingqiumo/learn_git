@@ -1,0 +1,1 @@
+/usr/bin/c++  -g -Wall -pthread -hiredis -g CMakeFiles/chat_client.dir/src/client/chat_client.cpp.o -o ../bin/chat_client   -L/home/hsj/build/release-install-cpp11/lib  -Wl,-rpath,/home/hsj/build/release-install-cpp11/lib -lpthread 

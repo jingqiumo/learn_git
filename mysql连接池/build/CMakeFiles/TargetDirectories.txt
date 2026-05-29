@@ -1,0 +1,3 @@
+/home/hsj/dev/mysql连接池/build/CMakeFiles/mysql_connpool.dir
+/home/hsj/dev/mysql连接池/build/CMakeFiles/edit_cache.dir
+/home/hsj/dev/mysql连接池/build/CMakeFiles/rebuild_cache.dir
